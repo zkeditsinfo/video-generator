@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: video-generator
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: VOICE_ID
+        sync: false
