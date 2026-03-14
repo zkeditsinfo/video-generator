@@ -1,10 +1,11 @@
 from flask import Flask, request, jsonify
 import requests
 import os
-from moviepy.editor import *
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
 import tempfile
+import base64
+import subprocess
 
 app = Flask(__name__)
 
@@ -14,17 +15,12 @@ VOICE_ID = os.environ.get("VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 def create_text_image(text, width=1080, height=1920):
     img = Image.new('RGB', (width, height), color=(15, 15, 15))
     draw = ImageDraw.Draw(img)
-    
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60)
-        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40)
     except:
         font = ImageFont.load_default()
-        font_small = font
-
     wrapped = textwrap.fill(text, width=20)
     draw.text((540, 960), wrapped, font=font, fill=(255, 255, 255), anchor="mm", align="center")
-    
     tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     img.save(tmp.name)
     return tmp.name
@@ -50,25 +46,19 @@ def generate_voice(text):
 def generate():
     data = request.json
     script = data.get("script", "")
-    
     img_path = create_text_image(script)
     audio_path = generate_voice(script)
-    
-    audio_clip = AudioFileClip(audio_path)
-    duration = audio_clip.duration
-    
-    img_clip = ImageClip(img_path).set_duration(duration)
-    img_clip = img_clip.set_audio(audio_clip)
-    
     output = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
-    img_clip.write_videofile(output.name, fps=24, codec="libx264", audio_codec="aac")
-    
+    cmd = [
+        "ffmpeg", "-loop", "1", "-i", img_path,
+        "-i", audio_path,
+        "-c:v", "libx264", "-tune", "stillimage",
+        "-c:a", "aac", "-b:a", "192k",
+        "-shortest", "-y", output.name
+    ]
+    subprocess.run(cmd, check=True)
     with open(output.name, "rb") as f:
-        video_bytes = f.read()
-    
-    import base64
-    video_b64 = base64.b64encode(video_bytes).decode()
-    
+        video_b64 = base64.b64encode(f.read()).decode()
     return jsonify({"video_base64": video_b64, "status": "success"})
 
 @app.route("/health", methods=["GET"])
