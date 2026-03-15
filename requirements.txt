@@ -1,5 +1,4 @@
 flask
 requests
-moviepy
 Pillow
 gunicorn
