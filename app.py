@@ -6,11 +6,9 @@ import textwrap
 import tempfile
 import base64
 import subprocess
+from gtts import gTTS
 
 app = Flask(__name__)
-
-ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
-VOICE_ID = os.environ.get("VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 
 def create_text_image(text, width=1080, height=1920):
     img = Image.new('RGB', (width, height), color=(20, 20, 20))
@@ -31,23 +29,9 @@ def create_text_image(text, width=1080, height=1920):
     return tmp.name
 
 def generate_voice(text):
-    url = f"https://api.elevenlabs.io/v1/text-to-speech/{VOICE_ID}"
-    headers = {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-    }
-    data = {
-        "text": text,
-        "model_id": "eleven_multilingual_v2",
-        "output_format": "mp3_44100_128",
-        "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
-    }
-    response = requests.post(url, json=data, headers=headers)
-    if response.status_code != 200:
-        raise Exception(f"ElevenLabs error: {response.status_code} - {response.text}")
+    tts = gTTS(text=text, lang='ar', slow=False)
     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-    tmp.write(response.content)
-    tmp.close()
+    tts.save(tmp.name)
     return tmp.name
 
 @app.route("/health", methods=["GET"])
@@ -86,3 +70,8 @@ def generate():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+```
+
+وعدّل **requirements.txt** وأضف:
+```
+gtts
