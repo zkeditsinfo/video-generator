@@ -39,19 +39,16 @@ def generate_voice(text):
     data = {
         "text": text,
         "model_id": "eleven_multilingual_v2",
+        "output_format": "mp3_44100_128",
         "voice_settings": {"stability": 0.5, "similarity_boost": 0.75}
     }
     response = requests.post(url, json=data, headers=headers)
-    tmp_mp3 = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
-    tmp_mp3.write(response.content)
-    tmp_mp3.close()
-    tmp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    subprocess.run([
-        "ffmpeg", "-i", tmp_mp3.name,
-        "-ar", "44100", "-ac", "2",
-        "-y", tmp_wav.name
-    ], check=True)
-    return tmp_wav.name
+    if response.status_code != 200:
+        raise Exception(f"ElevenLabs error: {response.status_code} - {response.text}")
+    tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+    tmp.write(response.content)
+    tmp.close()
+    return tmp.name
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -66,13 +63,21 @@ def generate():
         audio_path = generate_voice(script)
         output = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
         cmd = [
-            "ffmpeg", "-loop", "1", "-i", img_path,
+            "ffmpeg",
+            "-loop", "1",
+            "-i", img_path,
             "-i", audio_path,
-            "-c:v", "libx264", "-tune", "stillimage",
-            "-c:a", "aac", "-b:a", "192k",
-            "-shortest", "-y", output.name
+            "-c:v", "libx264",
+            "-tune", "stillimage",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-pix_fmt", "yuv420p",
+            "-shortest",
+            "-y", output.name
         ]
-        subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"ffmpeg error: {result.stderr}")
         with open(output.name, "rb") as f:
             video_b64 = base64.b64encode(f.read()).decode()
         return jsonify({"video_base64": video_b64, "status": "success"})
